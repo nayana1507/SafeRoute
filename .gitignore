@@ -6,9 +6,9 @@ __v0_jsx-dev-runtime.ts
 .design-cache/
 .v0-trash/
 .vercel/
-
+*.tsbuildinfo
 # Environment variables
-.env*.local
+.env.local
 
 # Common ignores
 node_modules
