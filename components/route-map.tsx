@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -19,6 +18,11 @@ import {
   type RoadRoute,
   ZONES,
 } from "./route-data";
+
+import {
+  LightingReportsMapLayer,
+  LightingReportControls,
+} from "@/components/LightingReportControls";
 
 type Props = {
   pickupId: string;
@@ -51,6 +55,8 @@ type ApiResponse = {
   riskMessage?: string;
 };
 
+type Position = [number, number];
+
 function createMarker(color: string) {
   return L.divIcon({
     className: "",
@@ -68,7 +74,7 @@ function MapController({
   pickupPosition,
 }: {
   route: RoadRoute | null;
-  pickupPosition: [number, number];
+  pickupPosition: Position;
 }) {
   const map = useMap();
 
@@ -121,7 +127,11 @@ export default function RouteMap({
   const [routes, setRoutes] = useState<RoadRoute[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+<<<<<<< HEAD
   const [riskMessage, setRiskMessage] = useState("");
+=======
+  const [reportPosition, setReportPosition] = useState<Position | null>(null);
+>>>>>>> 3a4bbc2c50b09ab85b6a004bc13790cb5b3da847
 
   const pickup = useMemo(
     () => ZONES.find((zone) => zone.id === pickupId),
@@ -204,6 +214,7 @@ export default function RouteMap({
               Number.isFinite(route.distanceMeters) &&
               Number.isFinite(route.durationSeconds)
           )
+<<<<<<< HEAD
           .map((route, index) => {
             const candidateScore =
               route.riskScore ??
@@ -245,17 +256,46 @@ export default function RouteMap({
               source: route.source ?? "ORS + FastAPI",
             };
           });
+=======
+          .map((route, index) => ({
+            id: `route-${index + 1}`,
+            // ORS returns [longitude, latitude].
+            // Leaflet uses [latitude, longitude].
+            coordinates: route.coordinates.map(
+              ([longitude, latitude]) =>
+                [latitude, longitude] as Position
+            ),
+            distanceMeters: route.distanceMeters,
+            durationSeconds: route.durationSeconds,
+            riskScore: null,
+            source: "ORS",
+          }));
+>>>>>>> 3a4bbc2c50b09ab85b6a004bc13790cb5b3da847
 
         if (validRoutes.length === 0) {
           throw new Error("No valid route geometry was returned.");
         }
 
+<<<<<<< HEAD
         // Fastest means lowest estimated driving duration.
         validRoutes.sort(
           (a, b) =>
             a.durationSeconds - b.durationSeconds ||
             a.distanceMeters - b.distanceMeters
         );
+=======
+        validRoutes.sort((a, b) => {
+          // Primary: shortest estimated driving time.
+          const timeDifference = a.durationSeconds - b.durationSeconds;
+
+          if (timeDifference !== 0) {
+            return timeDifference;
+          }
+
+          // Tie-breaker: shorter distance when estimated times are equal.
+          return a.distanceMeters - b.distanceMeters;
+        });
+>>>>>>> 3a4bbc2c50b09ab85b6a004bc13790cb5b3da847
 
         const normalizedRoutes = validRoutes.map((route, index) => ({
           ...route,
@@ -416,6 +456,11 @@ export default function RouteMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
+          {/* Click the map to select a lighting-report location. */}
+          <LightingReportsMapLayer
+            onLocationSelected={setReportPosition}
+          />
+
           <Marker position={pickup.position} icon={pickupIcon}>
             <Popup>Pickup: {pickup.name}</Popup>
           </Marker>
@@ -459,6 +504,9 @@ export default function RouteMap({
           })}
         </MapContainer>
       </div>
+
+      {/* Lighting-report form: select a map location, then submit. */}
+      <LightingReportControls position={reportPosition} />
 
       {routes.length > 0 && (
         <p className="text-xs text-slate-500">
