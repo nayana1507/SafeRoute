@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,6 +18,11 @@ import {
   type RoadRoute,
   ZONES,
 } from "./route-data";
+
+import {
+  LightingReportsMapLayer,
+  LightingReportControls,
+} from "@/components/LightingReportControls";
 
 type Props = {
   pickupId: string;
@@ -43,6 +47,8 @@ type ApiResponse = {
   error?: string;
 };
 
+type Position = [number, number];
+
 function createMarker(color: string) {
   return L.divIcon({
     className: "",
@@ -60,7 +66,7 @@ function MapController({
   pickupPosition,
 }: {
   route: RoadRoute | null;
-  pickupPosition: [number, number];
+  pickupPosition: Position;
 }) {
   const map = useMap();
 
@@ -113,6 +119,7 @@ export default function RouteMap({
   const [routes, setRoutes] = useState<RoadRoute[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reportPosition, setReportPosition] = useState<Position | null>(null);
 
   const pickup = useMemo(
     () => ZONES.find((zone) => zone.id === pickupId),
@@ -192,7 +199,7 @@ export default function RouteMap({
             // Leaflet uses [latitude, longitude].
             coordinates: route.coordinates.map(
               ([longitude, latitude]) =>
-                [latitude, longitude] as [number, number]
+                [latitude, longitude] as Position
             ),
             distanceMeters: route.distanceMeters,
             durationSeconds: route.durationSeconds,
@@ -205,16 +212,16 @@ export default function RouteMap({
         }
 
         validRoutes.sort((a, b) => {
-           // Primary: shortest estimated driving time.
-           const timeDifference = a.durationSeconds - b.durationSeconds;
+          // Primary: shortest estimated driving time.
+          const timeDifference = a.durationSeconds - b.durationSeconds;
 
-           if (timeDifference !== 0) {
-              return timeDifference;
-        }
+          if (timeDifference !== 0) {
+            return timeDifference;
+          }
 
-        // Tie-breaker: shorter distance when estimated times are equal.
-            return a.distanceMeters - b.distanceMeters;
-       });
+          // Tie-breaker: shorter distance when estimated times are equal.
+          return a.distanceMeters - b.distanceMeters;
+        });
 
         const normalizedRoutes = validRoutes.map((route, index) => ({
           ...route,
@@ -351,6 +358,11 @@ export default function RouteMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
+          {/* Click the map to select a lighting-report location. */}
+          <LightingReportsMapLayer
+            onLocationSelected={setReportPosition}
+          />
+
           <Marker position={pickup.position} icon={pickupIcon}>
             <Popup>Pickup: {pickup.name}</Popup>
           </Marker>
@@ -379,6 +391,9 @@ export default function RouteMap({
           })}
         </MapContainer>
       </div>
+
+      {/* Lighting-report form: select a map location, then submit. */}
+      <LightingReportControls position={reportPosition} />
 
       {routes.length > 0 && (
         <p className="text-xs text-slate-500">
