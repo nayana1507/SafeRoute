@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import L from "leaflet";
 import {
   MapContainer,
@@ -20,6 +19,11 @@ import {
   ZONES,
 } from "./route-data";
 
+import {
+  LightingReportsMapLayer,
+  LightingReportControls,
+} from "@/components/LightingReportControls";
+
 type Props = {
   pickupId: string;
   destinationId: string;
@@ -35,13 +39,23 @@ type ApiRoute = {
   distanceMeters: number;
   durationSeconds: number;
   riskScore: number | null;
-  source: "ORS";
+  safetyScore?: number | null;
+  risk_score?: number | null;
+  riskBand?: string;
+  risk_band?: string;
+  confidenceScore?: number | null;
+  riskError?: string | null;
+  source?: string;
 };
 
 type ApiResponse = {
   routes?: ApiRoute[];
   error?: string;
+  riskStatus?: "success" | "partial" | "failed";
+  riskMessage?: string;
 };
+
+type Position = [number, number];
 
 function createMarker(color: string) {
   return L.divIcon({
@@ -60,7 +74,7 @@ function MapController({
   pickupPosition,
 }: {
   route: RoadRoute | null;
-  pickupPosition: [number, number];
+  pickupPosition: Position;
 }) {
   const map = useMap();
 
@@ -113,6 +127,11 @@ export default function RouteMap({
   const [routes, setRoutes] = useState<RoadRoute[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+<<<<<<< HEAD
+  const [riskMessage, setRiskMessage] = useState("");
+=======
+  const [reportPosition, setReportPosition] = useState<Position | null>(null);
+>>>>>>> 3a4bbc2c50b09ab85b6a004bc13790cb5b3da847
 
   const pickup = useMemo(
     () => ZONES.find((zone) => zone.id === pickupId),
@@ -129,6 +148,13 @@ export default function RouteMap({
     routes[0] ??
     null;
 
+  const handleRoutesLoaded = useCallback(
+    (newRoutes: RoadRoute[]) => {
+      onRoutesLoaded(newRoutes);
+    },
+    [onRoutesLoaded]
+  );
+
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -136,7 +162,8 @@ export default function RouteMap({
     async function loadRoutes() {
       setRoutes([]);
       setError("");
-      onRoutesLoaded([]);
+      setRiskMessage("");
+      handleRoutesLoaded([]);
 
       if (!pickup || !destination) {
         setError("Please select valid pickup and destination zones.");
@@ -163,6 +190,7 @@ export default function RouteMap({
             destination: destination.position,
           }),
           signal: controller.signal,
+          cache: "no-store",
         });
 
         const data = (await response.json()) as ApiResponse;
@@ -186,35 +214,88 @@ export default function RouteMap({
               Number.isFinite(route.distanceMeters) &&
               Number.isFinite(route.durationSeconds)
           )
+<<<<<<< HEAD
+          .map((route, index) => {
+            const candidateScore =
+              route.riskScore ??
+              route.safetyScore ??
+              route.risk_score ??
+              null;
+
+            const score =
+              typeof candidateScore === "number" &&
+              Number.isFinite(candidateScore)
+                ? candidateScore
+                : null;
+
+            const band =
+              score !== null
+                ? route.riskBand ?? route.risk_band ?? "Unknown"
+                : "Unknown";
+
+            return {
+              id: `route-${index + 1}`,
+
+              // ORS GeoJSON uses [longitude, latitude].
+              // Leaflet uses [latitude, longitude].
+              coordinates: route.coordinates.map(
+                ([longitude, latitude]) =>
+                  [latitude, longitude] as [number, number]
+              ),
+
+              distanceMeters: route.distanceMeters,
+              durationSeconds: route.durationSeconds,
+              riskScore: score,
+              riskBand: band,
+              confidenceScore:
+                typeof route.confidenceScore === "number" &&
+                Number.isFinite(route.confidenceScore)
+                  ? route.confidenceScore
+                  : null,
+              riskError: route.riskError ?? null,
+              source: route.source ?? "ORS + FastAPI",
+            };
+          });
+=======
           .map((route, index) => ({
             id: `route-${index + 1}`,
             // ORS returns [longitude, latitude].
             // Leaflet uses [latitude, longitude].
             coordinates: route.coordinates.map(
               ([longitude, latitude]) =>
-                [latitude, longitude] as [number, number]
+                [latitude, longitude] as Position
             ),
             distanceMeters: route.distanceMeters,
             durationSeconds: route.durationSeconds,
             riskScore: null,
             source: "ORS",
           }));
+>>>>>>> 3a4bbc2c50b09ab85b6a004bc13790cb5b3da847
 
         if (validRoutes.length === 0) {
           throw new Error("No valid route geometry was returned.");
         }
 
+<<<<<<< HEAD
+        // Fastest means lowest estimated driving duration.
+        validRoutes.sort(
+          (a, b) =>
+            a.durationSeconds - b.durationSeconds ||
+            a.distanceMeters - b.distanceMeters
+        );
+=======
         validRoutes.sort((a, b) => {
-           // Primary: shortest estimated driving time.
-           const timeDifference = a.durationSeconds - b.durationSeconds;
+          // Primary: shortest estimated driving time.
+          const timeDifference = a.durationSeconds - b.durationSeconds;
 
-           if (timeDifference !== 0) {
-              return timeDifference;
-        }
+          if (timeDifference !== 0) {
+            return timeDifference;
+          }
 
-        // Tie-breaker: shorter distance when estimated times are equal.
-            return a.distanceMeters - b.distanceMeters;
-       });
+          // Tie-breaker: shorter distance when estimated times are equal.
+          return a.distanceMeters - b.distanceMeters;
+        });
+>>>>>>> 3a4bbc2c50b09ab85b6a004bc13790cb5b3da847
 
         const normalizedRoutes = validRoutes.map((route, index) => ({
           ...route,
@@ -224,11 +305,21 @@ export default function RouteMap({
         if (!active) return;
 
         setRoutes(normalizedRoutes);
-        onRoutesLoaded(normalizedRoutes);
+        handleRoutesLoaded(normalizedRoutes);
+
+        const failedRiskCount = normalizedRoutes.filter(
+          (route) => route.riskScore === null
+        ).length;
+
+        if (failedRiskCount > 0) {
+          setRiskMessage(
+            `${failedRiskCount} of ${normalizedRoutes.length} routes have no risk prediction. Check the FastAPI terminal for errors.`
+          );
+        }
 
         if (normalizedRoutes.length === 1) {
           setError(
-            "Only one route was returned. Alternative routes are not guaranteed for every journey."
+            "Only one route was returned. OpenRouteService may not provide alternatives for every journey."
           );
         }
       } catch (err) {
@@ -243,12 +334,10 @@ export default function RouteMap({
           err instanceof Error ? err.message : "Could not load routes.";
 
         setRoutes([]);
-        onRoutesLoaded([]);
+        handleRoutesLoaded([]);
         setError(`${message} Check your connection and try again.`);
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     }
 
@@ -264,7 +353,7 @@ export default function RouteMap({
     refreshKey,
     pickup,
     destination,
-    onRoutesLoaded,
+    handleRoutesLoaded,
   ]);
 
   if (!pickup || !destination) {
@@ -296,7 +385,7 @@ export default function RouteMap({
 
       {loading && (
         <p role="status" className="text-sm text-slate-600">
-          Finding available road routes…
+          Finding road routes and calculating risk predictions…
         </p>
       )}
 
@@ -306,6 +395,15 @@ export default function RouteMap({
           className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
         >
           {error}
+        </div>
+      )}
+
+      {riskMessage && (
+        <div
+          role="status"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+        >
+          {riskMessage}
         </div>
       )}
 
@@ -319,11 +417,18 @@ export default function RouteMap({
           </div>
 
           <div>
-            <p className="text-xs text-slate-500">
-              Estimated driving time
-            </p>
+            <p className="text-xs text-slate-500">Estimated driving time</p>
             <p className="font-semibold">
               {formatDuration(selectedRoute.durationSeconds)}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-500">Predicted risk</p>
+            <p className="font-semibold">
+              {selectedRoute.riskScore !== null
+                ? `${selectedRoute.riskScore.toFixed(2)} (${selectedRoute.riskBand})`
+                : "Not available"}
             </p>
           </div>
 
@@ -351,6 +456,11 @@ export default function RouteMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
+          {/* Click the map to select a lighting-report location. */}
+          <LightingReportsMapLayer
+            onLocationSelected={setReportPosition}
+          />
+
           <Marker position={pickup.position} icon={pickupIcon}>
             <Popup>Pickup: {pickup.name}</Popup>
           </Marker>
@@ -374,17 +484,35 @@ export default function RouteMap({
                 eventHandlers={{
                   click: () => onSelectRoute(route.id),
                 }}
-              />
+              >
+                <Popup>
+                  <strong>
+                    {route.id.replace("route-", "Route option ")}
+                  </strong>
+                  <br />
+                  Distance: {formatDistance(route.distanceMeters)}
+                  <br />
+                  Duration: {formatDuration(route.durationSeconds)}
+                  <br />
+                  Risk:{" "}
+                  {route.riskScore !== null
+                    ? `${route.riskScore.toFixed(2)} (${route.riskBand})`
+                    : "Not available"}
+                </Popup>
+              </Polyline>
             );
           })}
         </MapContainer>
       </div>
 
+      {/* Lighting-report form: select a map location, then submit. */}
+      <LightingReportControls position={reportPosition} />
+
       {routes.length > 0 && (
         <p className="text-xs text-slate-500">
           {routes.length} route option{routes.length === 1 ? "" : "s"} returned.
-          Route alternatives are not guaranteed. Zone coordinates are
-          approximate reference points.
+          Select a route card or route line to highlight it. Zone coordinates
+          are approximate reference points.
         </p>
       )}
     </section>

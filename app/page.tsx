@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
+
 import RouteMapLoader from "@/components/route-map-loader";
 import {
   formatDistance,
@@ -22,19 +23,22 @@ export default function Page() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [routes, setRoutes] = useState<RoadRoute[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+
   const [darkMode, setDarkMode] = useState(false);
   const [themeLoaded, setThemeLoaded] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const pickup = ZONES.find((zone) => zone.id === pickupId)!;
-  const destination = ZONES.find((zone) => zone.id === destinationId)!;
+  const pickup = ZONES.find((zone) => zone.id === pickupId);
+  const destination = ZONES.find((zone) => zone.id === destinationId);
 
+  // Load the user's saved theme.
   useEffect(() => {
     const savedTheme = localStorage.getItem("saferoute-theme");
     setDarkMode(savedTheme === "dark");
     setThemeLoaded(true);
   }, []);
 
+  // Apply the selected theme and remember it.
   useEffect(() => {
     if (!themeLoaded) return;
 
@@ -42,8 +46,14 @@ export default function Page() {
     localStorage.setItem("saferoute-theme", darkMode ? "dark" : "light");
   }, [darkMode, themeLoaded]);
 
+  // Sort routes by estimated driving time, then distance.
   const sortedRoutes = useMemo(
-    () => [...routes].sort((a, b) => a.durationSeconds - b.durationSeconds),
+    () =>
+      [...routes].sort(
+        (a, b) =>
+          a.durationSeconds - b.durationSeconds ||
+          a.distanceMeters - b.distanceMeters
+      ),
     [routes]
   );
 
@@ -54,8 +64,10 @@ export default function Page() {
 
   const fastestRouteId = sortedRoutes[0]?.id ?? null;
 
+  // Receive routes from the map component.
   const handleRoutesLoaded = useCallback((newRoutes: RoadRoute[]) => {
     setRoutes(newRoutes);
+
     setSelectedRouteId((currentId) =>
       newRoutes.some((route) => route.id === currentId)
         ? currentId
@@ -67,6 +79,7 @@ export default function Page() {
     setSelectedRouteId(routeId);
   }, []);
 
+  // Sign out of Firebase.
   async function handleLogout() {
     setLoggingOut(true);
 
@@ -79,6 +92,7 @@ export default function Page() {
     }
   }
 
+  // Prevent pickup and destination from being the same zone.
   function handlePickupChange(newPickupId: string) {
     if (newPickupId === destinationId) {
       const alternative = ZONES.find((zone) => zone.id !== newPickupId);
@@ -110,6 +124,7 @@ export default function Page() {
           darkMode ? "dark-mode" : ""
         } bg-slate-50 text-slate-900`}
       >
+        {/* Header */}
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
             <div>
@@ -117,7 +132,7 @@ export default function Page() {
                 SafeRoute
               </h1>
               <p className="text-sm text-slate-500">
-                Route safety assistance for delivery partners
+                Route assistance for delivery partners
               </p>
             </div>
 
@@ -147,14 +162,14 @@ export default function Page() {
         </header>
 
         <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+          {/* Route selection */}
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-5">
               <h2 className="text-lg font-semibold">
                 Plan a delivery route
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Select your pickup and destination zones to find available
-                road routes.
+                Select your pickup and destination to find available road routes.
               </p>
             </div>
 
@@ -163,12 +178,11 @@ export default function Page() {
                 <span className="mb-2 block text-sm font-medium">
                   Pickup zone
                 </span>
+
                 <select
                   value={pickupId}
-                  onChange={(event) =>
-                    handlePickupChange(event.target.value)
-                  }
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+                  onChange={(event) => handlePickupChange(event.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                 >
                   {ZONES.map((zone) => (
                     <option key={zone.id} value={zone.id}>
@@ -176,8 +190,9 @@ export default function Page() {
                     </option>
                   ))}
                 </select>
+
                 <span className="mt-1 block text-xs text-slate-500">
-                  {pickup.landmarks}
+                  {pickup?.landmarks}
                 </span>
               </label>
 
@@ -185,12 +200,13 @@ export default function Page() {
                 <span className="mb-2 block text-sm font-medium">
                   Destination zone
                 </span>
+
                 <select
                   value={destinationId}
                   onChange={(event) =>
                     handleDestinationChange(event.target.value)
                   }
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                 >
                   {ZONES.map((zone) => (
                     <option key={zone.id} value={zone.id}>
@@ -198,8 +214,9 @@ export default function Page() {
                     </option>
                   ))}
                 </select>
+
                 <span className="mt-1 block text-xs text-slate-500">
-                  {destination.landmarks}
+                  {destination?.landmarks}
                 </span>
               </label>
             </div>
@@ -208,22 +225,25 @@ export default function Page() {
               <button
                 type="button"
                 onClick={() => setRefreshKey((key) => key + 1)}
-                className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                disabled={pickupId === destinationId}
+                className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
               >
                 Recalculate routes
               </button>
+
               <p className="text-xs text-slate-500">
-                Route requests require an internet connection.
+                Routes require an internet connection and a working routing service.
               </p>
             </div>
           </section>
 
+          {/* Map and route details */}
           <section className="grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
             <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold">Route map</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Select a route card to highlight the route on the map.
+                  Select a route card to highlight that route on the map.
                 </p>
               </div>
 
@@ -238,17 +258,18 @@ export default function Page() {
             </div>
 
             <aside className="min-w-0 space-y-6">
+              {/* Available routes */}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-semibold">Available routes</h2>
                 <p className="mb-4 mt-1 text-sm text-slate-500">
-                  Compare the estimated distance and driving time.
+                  Compare estimated distance and driving time.
                 </p>
 
                 {routes.length === 0 ? (
-                  <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                    Routes will appear here after a successful routing
-                    request.
-                  </p>
+                  <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                    Routes will appear here after a successful routing request.
+                    Select your zones and click Recalculate routes.
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {sortedRoutes.map((route, index) => {
@@ -261,7 +282,7 @@ export default function Page() {
                           type="button"
                           onClick={() => handleSelectRoute(route.id)}
                           aria-pressed={isSelected}
-                          className={`w-full rounded-xl border p-4 text-left transition ${
+                          className={`w-full rounded-xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                             isSelected
                               ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600"
                               : "border-slate-200 bg-white hover:border-slate-400"
@@ -272,12 +293,14 @@ export default function Page() {
                               <p className="font-semibold">
                                 Route option {index + 1}
                               </p>
+
                               {isFastest && (
-                                <span className="mt-1 inline-block rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
+                                <span className="mt-2 inline-block rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
                                   Fastest returned
                                 </span>
                               )}
                             </div>
+
                             {isSelected && (
                               <span className="text-xs font-semibold text-emerald-800">
                                 Selected
@@ -294,6 +317,7 @@ export default function Page() {
                                 {formatDistance(route.distanceMeters)}
                               </p>
                             </div>
+
                             <div>
                               <p className="text-xs text-slate-500">
                                 Driving time
@@ -310,14 +334,7 @@ export default function Page() {
                 )}
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-4">
-                <h2 className="font-semibold">Route safety</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Routes are based on road-routing data. Safety scores and
-                  real-time footfall data are not currently available.
-                </p>
-              </section>
-
+              {/* Selected route summary */}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-semibold">
                   Selected route summary
@@ -331,6 +348,7 @@ export default function Page() {
                         {formatDistance(selectedRoute.distanceMeters)}
                       </p>
                     </div>
+
                     <div className="rounded-xl bg-slate-50 p-3">
                       <p className="text-xs text-slate-500">Driving time</p>
                       <p className="mt-1 text-lg font-bold">
@@ -345,18 +363,17 @@ export default function Page() {
                 )}
 
                 <p className="mt-4 text-xs leading-5 text-slate-500">
-                  These are routing-service estimates, not live traffic
-                  predictions.
+                  Driving times are routing-service estimates and may not reflect
+                  live traffic conditions.
                 </p>
               </section>
             </aside>
           </section>
 
           <footer className="rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500">
-            Route coordinates are approximate reference points. Routes and
-            driving times are provided by the routing service. Live footfall,
-            crime, lighting, weather and traffic feeds are not currently
-            connected.
+            Route coordinates are approximate reference points. Live footfall,
+            traffic, lighting, and other external data feeds are not represented
+            by this route-only dashboard.
           </footer>
         </main>
       </div>
